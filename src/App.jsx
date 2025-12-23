@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 
-// === КОНФИГ КЛАВИАТУРЫ (Разбиваем на секции) ===
+// === КОНФИГ КЛАВИАТУРЫ ===
 
+// Основной блок оставим массивами, так удобнее для рядов
 const SECTION_MAIN = [
   ['Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'],
   ['Backquote', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal', 'Backspace'],
@@ -16,19 +17,7 @@ const SECTION_MAIN = [
 const SECTION_NAV = [
   ['PrintScreen', 'ScrollLock', 'Pause'],
   ['Insert', 'Home', 'PageUp'],
-  ['Delete', 'End', 'PageDown'],
-  // Пустой ряд для отступа перед стрелками
-  [], 
-  ['ArrowUp'],
-  ['ArrowLeft', 'ArrowDown', 'ArrowRight']
-];
-
-const SECTION_NUM = [
-  ['NumLock', 'NumpadDivide', 'NumpadMultiply', 'NumpadSubtract'],
-  ['Numpad7', 'Numpad8', 'Numpad9', 'NumpadAdd'],
-  ['Numpad4', 'Numpad5', 'Numpad6'], // NumpadAdd занимает 2 ряда, но в упрощенной сетке оставим так
-  ['Numpad1', 'Numpad2', 'Numpad3', 'NumpadEnter'],
-  ['Numpad0', 'NumpadDecimal'] // NumpadEnter занимает 2 ряда
+  ['Delete', 'End', 'PageDown']
 ];
 
 const LABELS = {
@@ -41,12 +30,9 @@ const LABELS = {
 };
 
 const WIDTHS = {
-  Backspace: 'w-24', Tab: 'w-20', CapsLock: 'w-24', Enter: 'w-28', ShiftLeft: 'w-28', ShiftRight: 'w-32', 
-  Space: 'w-64 sm:w-80', 
-  ControlLeft: 'w-16', MetaLeft: 'w-14', AltLeft: 'w-16', ControlRight: 'w-16', AltRight: 'w-16', MetaRight: 'w-14',
-  Numpad0: 'w-[108px]', // Двойная ширина для нуля
-  NumpadAdd: 'h-[108px]', // Вертикальные пока сложно реализовать в flex-row, оставим обычными
-  NumpadEnter: 'h-[108px]'
+  Backspace: 'w-[90px]', Tab: 'w-[70px]', CapsLock: 'w-[80px]', Enter: 'w-[100px]', ShiftLeft: 'w-[100px]', ShiftRight: 'w-[110px]', 
+  Space: 'flex-grow', 
+  ControlLeft: 'w-[60px]', MetaLeft: 'w-[50px]', AltLeft: 'w-[50px]', ControlRight: 'w-[60px]', AltRight: 'w-[50px]', MetaRight: 'w-[50px]'
 };
 
 // Тексты для тайпинга
@@ -59,13 +45,13 @@ const TEXTS = [
 
 // === КОМПОНЕНТЫ ===
 
-// 1. Кнопка с "дорогой" физикой
-const Key = ({ code, active, tested, label, customClass = "" }) => {
-  // Базовая ширина
-  const baseWidth = WIDTHS[code] || 'w-12';
+// 1. Кнопка
+const Key = ({ code, active, tested, label, className = "" }) => {
+  // Если класс ширины передан снаружи (например из Grid), используем его, иначе ищем в WIDTHS или ставим дефолт
+  const baseWidth = className.includes('w-') || className.includes('flex-grow') ? '' : (WIDTHS[code] || 'w-[50px]');
   
   return (
-    <div className={`relative ${baseWidth} h-12 m-[3px] perspective-500 ${customClass}`}>
+    <div className={`relative h-[50px] ${baseWidth} ${className} perspective-500`}>
       <motion.div
         layout
         initial={false}
@@ -92,12 +78,9 @@ const Key = ({ code, active, tested, label, customClass = "" }) => {
         <span className={`transition-colors duration-200 ${active ? 'text-white' : tested ? 'text-indigo-300' : ''}`}>
           {label}
         </span>
-        
-        {/* Блик сверху */}
         <div className="absolute top-0 left-0 right-0 h-[40%] bg-gradient-to-b from-white/10 to-transparent rounded-t-lg pointer-events-none" />
       </motion.div>
       
-      {/* "Дно" кнопки */}
       {!active && (
         <div className="absolute inset-x-0 -bottom-1 h-full rounded-lg bg-slate-900 -z-10 translate-y-1" />
       )}
@@ -111,11 +94,9 @@ const TesterMode = () => {
   const [history, setHistory] = useState(new Set());
   const [lastKey, setLastKey] = useState(null);
 
-  // ОПТИМИЗИРОВАННЫЙ СЛУШАТЕЛЬ (Исправлен баг перерисовки)
   useEffect(() => {
     const handleDown = (e) => {
       e.preventDefault();
-      // Используем callback, чтобы не зависеть от activeKeys
       setActiveKeys(prev => {
         if (prev.includes(e.code)) return prev;
         return [...prev, e.code];
@@ -124,19 +105,15 @@ const TesterMode = () => {
       setLastKey(e.code);
     };
 
-    const handleUp = (e) => {
-      setActiveKeys(prev => prev.filter(k => k !== e.code));
-    };
+    const handleUp = (e) => setActiveKeys(prev => prev.filter(k => k !== e.code));
 
     window.addEventListener('keydown', handleDown);
     window.addEventListener('keyup', handleUp);
-    
-    // Очистка при размонтировании
     return () => {
       window.removeEventListener('keydown', handleDown);
       window.removeEventListener('keyup', handleUp);
     };
-  }, []); // Пустой массив = работает всегда
+  }, []);
 
   return (
     <motion.div 
@@ -146,15 +123,14 @@ const TesterMode = () => {
       transition={{ duration: 0.4 }}
       className="w-full flex flex-col items-center"
     >
-      {/* Контейнер для скролла на маленьких экранах */}
-      <div className="w-full overflow-x-auto pb-8 flex justify-center">
-        {/* Сама клавиатура (3 секции) */}
-        <div className="glass-panel p-6 rounded-[20px] inline-flex gap-4 shadow-2xl relative min-w-max">
+      <div className="w-full overflow-x-auto pb-8 flex justify-center px-4">
+        {/* Общий контейнер клавиатуры */}
+        <div className="glass-panel p-6 rounded-[20px] flex gap-6 shadow-2xl relative min-w-max items-start">
           
-          {/* СЕКЦИЯ 1: ОСНОВНАЯ */}
-          <div className="flex flex-col gap-1">
+          {/* 1. ОСНОВНАЯ КЛАВИАТУРА */}
+          <div className="flex flex-col gap-[6px]">
             {SECTION_MAIN.map((row, i) => (
-              <div key={i} className="flex">
+              <div key={i} className="flex gap-[6px]">
                 {row.map(code => (
                   <Key key={code} code={code} label={LABELS[code] || code.replace('Key', '').replace('Digit', '')} active={activeKeys.includes(code)} tested={history.has(code)} />
                 ))}
@@ -162,11 +138,11 @@ const TesterMode = () => {
             ))}
           </div>
 
-          {/* СЕКЦИЯ 2: НАВИГАЦИЯ + СТРЕЛКИ */}
-          <div className="flex flex-col gap-1 justify-between">
-            <div className="flex flex-col gap-1">
-              {SECTION_NAV.slice(0, 3).map((row, i) => (
-                <div key={i} className="flex">
+          {/* 2. БЛОК НАВИГАЦИИ */}
+          <div className="flex flex-col justify-between h-full">
+            <div className="flex flex-col gap-[6px]">
+              {SECTION_NAV.map((row, i) => (
+                <div key={i} className="flex gap-[6px]">
                   {row.map(code => (
                      <Key key={code} code={code} label={LABELS[code]} active={activeKeys.includes(code)} tested={history.has(code)} />
                   ))}
@@ -174,10 +150,10 @@ const TesterMode = () => {
               ))}
             </div>
             
-            {/* Стрелки отдельно для выравнивания */}
-            <div className="flex flex-col items-center gap-1 mt-auto">
+            {/* Стрелки */}
+            <div className="flex flex-col items-center gap-[6px] mt-auto pb-[2px]">
                <Key code="ArrowUp" label="↑" active={activeKeys.includes('ArrowUp')} tested={history.has('ArrowUp')} />
-               <div className="flex gap-1">
+               <div className="flex gap-[6px]">
                   <Key code="ArrowLeft" label="←" active={activeKeys.includes('ArrowLeft')} tested={history.has('ArrowLeft')} />
                   <Key code="ArrowDown" label="↓" active={activeKeys.includes('ArrowDown')} tested={history.has('ArrowDown')} />
                   <Key code="ArrowRight" label="→" active={activeKeys.includes('ArrowRight')} tested={history.has('ArrowRight')} />
@@ -185,22 +161,41 @@ const TesterMode = () => {
             </div>
           </div>
 
-          {/* СЕКЦИЯ 3: NUMPAD */}
-          <div className="flex flex-col gap-1 border-l border-white/10 pl-4">
-             {SECTION_NUM.map((row, i) => (
-                <div key={i} className="flex">
-                  {row.map(code => (
-                     <Key key={code} code={code} label={LABELS[code]} active={activeKeys.includes(code)} tested={history.has(code)} />
-                  ))}
-                </div>
-              ))}
+          {/* 3. NUMPAD (ТЕПЕРЬ НА CSS GRID) */}
+          <div className="grid grid-cols-4 gap-[6px] w-[220px]">
+             {/* Ряд 1 */}
+             <Key code="NumLock" label="Num" active={activeKeys.includes("NumLock")} tested={history.has("NumLock")} className="w-full" />
+             <Key code="NumpadDivide" label="/" active={activeKeys.includes("NumpadDivide")} tested={history.has("NumpadDivide")} className="w-full" />
+             <Key code="NumpadMultiply" label="*" active={activeKeys.includes("NumpadMultiply")} tested={history.has("NumpadMultiply")} className="w-full" />
+             <Key code="NumpadSubtract" label="-" active={activeKeys.includes("NumpadSubtract")} tested={history.has("NumpadSubtract")} className="w-full" />
+             
+             {/* Ряд 2 */}
+             <Key code="Numpad7" label="7" active={activeKeys.includes("Numpad7")} tested={history.has("Numpad7")} className="w-full" />
+             <Key code="Numpad8" label="8" active={activeKeys.includes("Numpad8")} tested={history.has("Numpad8")} className="w-full" />
+             <Key code="Numpad9" label="9" active={activeKeys.includes("Numpad9")} tested={history.has("Numpad9")} className="w-full" />
+             <Key code="NumpadAdd" label="+" active={activeKeys.includes("NumpadAdd")} tested={history.has("NumpadAdd")} className="w-full h-full row-span-2" />
+
+             {/* Ряд 3 */}
+             <Key code="Numpad4" label="4" active={activeKeys.includes("Numpad4")} tested={history.has("Numpad4")} className="w-full" />
+             <Key code="Numpad5" label="5" active={activeKeys.includes("Numpad5")} tested={history.has("Numpad5")} className="w-full" />
+             <Key code="Numpad6" label="6" active={activeKeys.includes("Numpad6")} tested={history.has("Numpad6")} className="w-full" />
+             
+             {/* Ряд 4 */}
+             <Key code="Numpad1" label="1" active={activeKeys.includes("Numpad1")} tested={history.has("Numpad1")} className="w-full" />
+             <Key code="Numpad2" label="2" active={activeKeys.includes("Numpad2")} tested={history.has("Numpad2")} className="w-full" />
+             <Key code="Numpad3" label="3" active={activeKeys.includes("Numpad3")} tested={history.has("Numpad3")} className="w-full" />
+             <Key code="NumpadEnter" label="Ent" active={activeKeys.includes("NumpadEnter")} tested={history.has("NumpadEnter")} className="w-full h-full row-span-2" />
+
+             {/* Ряд 5 */}
+             <Key code="Numpad0" label="0" active={activeKeys.includes("Numpad0")} tested={history.has("Numpad0")} className="w-full col-span-2" />
+             <Key code="NumpadDecimal" label="." active={activeKeys.includes("NumpadDecimal")} tested={history.has("NumpadDecimal")} className="w-full" />
           </div>
 
         </div>
       </div>
 
-      {/* Статистика снизу */}
-      <div className="mt-4 flex items-center gap-8 px-8 py-4 glass-panel rounded-full text-sm sm:text-base">
+      {/* Статистика */}
+      <div className="mt-8 flex items-center gap-8 px-8 py-4 glass-panel rounded-full text-sm sm:text-base">
         <div className="flex flex-col items-center">
           <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Нажато</span>
           <span className="text-indigo-400 font-mono text-xl">{history.size}</span>
@@ -367,7 +362,7 @@ export default function App() {
 
       {/* Футер */}
       <footer className="text-center text-slate-600 text-xs py-4 font-mono mt-auto">
-        Made with React & Tailwind
+      With love
       </footer>
     </div>
   );
