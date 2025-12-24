@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform, useSpring, LayoutGroup } from 'framer-motion';
+import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring, LayoutGroup, useAnimation } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import AnimatedBackground from './components/AnimatedBackground';
 import CustomCursor from './components/CustomCursor';
@@ -36,7 +36,15 @@ const TEXTS = [
   "В мире цифрового шума чистота дизайна и скорость реакции решают всё."
 ];
 
-// === 3D КЛАВИША (PERFORMANCE EDITION) ===
+// === 3D КЛАВИША (ULTIMATE OPTIMIZATION) ===
+// Custom comparison function:
+// React перерисует компонент ТОЛЬКО если изменились пропсы active или tested.
+// Игнорируем className и label, так как они статичны.
+const propsAreEqual = (prevProps, nextProps) => {
+    return prevProps.active === nextProps.active && 
+           prevProps.tested === nextProps.tested;
+};
+
 const Key3D = memo(({ code, label, active, tested, className = "" }) => {
   let widthClass = 'w-[50px]'; 
   if (className.includes('w-') || className.includes('flex-grow')) widthClass = ''; 
@@ -49,9 +57,10 @@ const Key3D = memo(({ code, label, active, tested, className = "" }) => {
   else if (['MetaLeft', 'MetaRight', 'AltLeft', 'AltRight'].includes(code)) widthClass = 'w-[55px]';
   else if (code === 'Space') widthClass = 'flex-grow';
 
-  // Config: используем duration для мгновенного отключения тени, чтобы не мылило при движении
+  // Пружины стали чуть "мягче" по stiffness, но "легче" по mass
+  // Это помогает браузеру быстрее просчитать старт движения
   const transitionConfig = {
-      transform: { type: "spring", stiffness: 1500, damping: 20, mass: 0.2 }, // Супер-быстрая пружина
+      transform: { type: "spring", stiffness: 800, damping: 25, mass: 0.5 },
       backgroundColor: { duration: 0.05 },
       boxShadow: { duration: 0.05 },
       borderColor: { duration: 0.05 },
@@ -64,50 +73,53 @@ const Key3D = memo(({ code, label, active, tested, className = "" }) => {
         initial={false}
         animate={{
             transform: active ? "translateZ(2px)" : "translateZ(6px)",
-            // ЦВЕТА
             backgroundColor: active ? '#6366f1' : tested ? 'rgba(99, 102, 241, 0.15)' : 'rgba(30, 41, 59, 0.7)',
             borderColor: active ? '#a5b4fc' : tested ? '#6366f1' : 'rgba(255,255,255,0.08)',
-            // 3D ТРЮК: Убрали сложную inset тень. Вместо нее меняем ширину нижнего бордера
             borderBottomWidth: active ? '0px' : '4px',
             borderBottomColor: 'rgba(0,0,0,0.4)',
-            // СВЕЧЕНИЕ только при активе. В покое - нет теней (GPU отдыхает)
             boxShadow: active ? '0 0 25px rgba(99, 102, 241, 0.8)' : 'none',
         }}
         transition={transitionConfig}
+        // Force GPU layer promotion explicitly
+        style={{ backfaceVisibility: 'hidden', WebkitFontSmoothing: 'subpixel-antialiased' }}
         className="w-full h-full rounded-md border-t border-l border-r flex items-center justify-center relative select-none box-border"
       >
         <span className={`font-mono font-bold text-[10px] sm:text-xs uppercase tracking-wider ${active ? 'text-white' : tested ? 'text-indigo-300' : 'text-slate-400'}`}
-              style={{ transform: active ? 'translateY(0px)' : 'translateY(-2px)' }} /* Компенсация движения текста */ >
+              style={{ transform: active ? 'translateY(0px)' : 'translateY(-2px)' }} >
             {label || code.replace('Key', '').replace('Digit', '')}
         </span>
-        
-        {/* Статичный градиент-блик */}
         <div className="absolute top-0 left-0 right-0 h-[40%] bg-gradient-to-b from-white/10 to-transparent rounded-t-md pointer-events-none" />
       </motion.div>
     </div>
   );
-});
+}, propsAreEqual);
 
-// === KEYBOARD WRAPPER ===
+// === KEYBOARD WRAPPER (WARMED UP) ===
 const Keyboard3DWrapper = ({ children }) => {
-    // Враппер использует нативные события через Ref (не обновляет стейт)
     const x = useMotionValue(0);
     const y = useMotionValue(0);
-
-    const smoothX = useSpring(x, { stiffness: 40, damping: 25 }); // Помягче пружина чтобы не дрожало
+    const smoothX = useSpring(x, { stiffness: 40, damping: 25 });
     const smoothY = useSpring(y, { stiffness: 40, damping: 25 });
 
     const rotateX = useTransform(smoothY, [-0.5, 0.5], ["8deg", "-8deg"]);
     const rotateY = useTransform(smoothX, [-0.5, 0.5], ["-8deg", "8deg"]);
+    
+    // !!! FORCE GPU WAKE UP HACK !!!
+    // Это значение незаметно анимируется, заставляя браузер всегда держать слой активным,
+    // имитируя нагрузку, как будто ты спамишь клавиши.
+    const controls = useAnimation();
+    useEffect(() => {
+        controls.start({
+            scale: [1, 1.0001, 1], // Микро-анимация
+            transition: { repeat: Infinity, duration: 1, ease: "linear" }
+        });
+    }, []);
 
     useEffect(() => {
         const handleMouseMove = (e) => {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            x.set((e.clientX / w) - 0.5);
-            y.set((e.clientY / h) - 0.5);
+            x.set((e.clientX / window.innerWidth) - 0.5);
+            y.set((e.clientY / window.innerHeight) - 0.5);
         };
-        // Passive listeners не блокируют поток
         window.addEventListener('mousemove', handleMouseMove, { passive: true });
         return () => window.removeEventListener('mousemove', handleMouseMove);
     }, [x, y]);
@@ -116,22 +128,17 @@ const Keyboard3DWrapper = ({ children }) => {
         <div className="w-full min-h-[60vh] flex items-center justify-center perspective-container">
             <motion.div 
                 style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-                // Убран will-change, на быстрых GPU он иногда вызывает баги рендеринга текста (мыло)
-                className="relative" 
+                animate={controls} // Применяем "грелку"
+                className="relative"
             >
-                {/* Корпус (остался без изменений, он статичен) */}
                 <div className="absolute inset-0 bg-[#0f172a] rounded-[28px]"
                     style={{ transform: "translateZ(-20px) translateY(8px) translateX(6px)", boxShadow: '0 40px 60px -15px rgba(0,0,0,0.8)' }}
                 />
                 <div className="absolute inset-0 bg-[#1e293b] rounded-[28px]" style={{ transform: "translateZ(-8px)" }} />
                 
-                {/* Plate */}
-                <div 
-                    className="bg-[#111827] p-5 rounded-[24px] border-[2px] border-[#1e293b] relative"
-                    style={{ transformStyle: "preserve-3d", background: '#111827' }} // Убрал градиент на фоне (меньше banding'а)
-                >
+                <div className="bg-[#111827] p-5 rounded-[24px] border-[2px] border-[#1e293b] relative"
+                     style={{ transformStyle: "preserve-3d", background: '#111827' }}>
                     {children}
-                    
                     <div className="absolute top-4 left-6 flex items-center gap-2 pointer-events-none opacity-80" style={{ transform: "translateZ(1px)" }}>
                          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]"></div>
                          <span className="text-[9px] text-slate-500 font-mono tracking-widest font-bold">KeiX 3D</span>
@@ -141,9 +148,6 @@ const Keyboard3DWrapper = ({ children }) => {
         </div>
     );
 };
-
-// ... TesterMode и TypingMode и App остаются почти такими же, 
-// но копируем полностью для надежности, чтобы структура была единой.
 
 const TesterMode = () => {
   const [activeKeys, setActiveKeys] = useState([]);
@@ -155,11 +159,13 @@ const TesterMode = () => {
       e.preventDefault();
       if(e.repeat) return;
       const c = e.code;
+      // Внимание: мы передаем ССЫЛКУ на массив (новую), но мемо-компоненты сравнивают строки.
       setActiveKeys(p => [...p, c]);
       setHistory(p => { const n = new Set(p); n.add(c); return n; });
       setLastKey(c);
     };
     const handleUp = (e) => setActiveKeys(p => p.filter(k => k !== e.code));
+
     window.addEventListener('keydown', handleDown);
     window.addEventListener('keyup', handleUp);
     return () => { 
@@ -168,55 +174,70 @@ const TesterMode = () => {
     };
   }, []);
 
-  return (
-    <div className="w-full flex flex-col items-center justify-center">
-      <Keyboard3DWrapper>
-        <div className="flex gap-4 p-4" style={{ transformStyle: 'preserve-3d' }}>
-            <div className="flex flex-col gap-[8px]" style={{ transformStyle: 'preserve-3d' }}>
-                 {SECTION_MAIN.map((row, i) => (
-                    <div key={i} className="flex gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>
-                        {row.map(code => (
-                            <Key3D key={code} code={code} label={LABELS[code]} active={activeKeys.includes(code)} tested={history.has(code)} className={code === 'Escape' ? 'mr-10' : ''} />
-                        ))}
-                    </div>
-                 ))}
-            </div>
-            <div className="flex flex-col justify-between" style={{ transformStyle: 'preserve-3d' }}>
-                <div className="flex flex-col gap-[8px]">
-                     {SECTION_NAV.map((row, i) => (
-                         <div key={i} className="flex gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>{row.map(code => <Key3D key={code} code={code} label={LABELS[code]} active={activeKeys.includes(code)} tested={history.has(code)} />)}</div>
+  // ИСПОЛЬЗУЕМ useMemo ДЛЯ КЭШИРОВАНИЯ ВСЕЙ СТРУКТУРЫ (DOM TREE)
+  // Мы пересоздаем структуру DOM клавиатуры только если меняются activeKeys или history.
+  // Это избавляет React от лишнего маппинга массивов (SECTION_MAIN.map...) при каждом чихе родителя.
+  const keyboardLayout = useMemo(() => {
+      return (
+        <Keyboard3DWrapper>
+            <div className="flex gap-4 p-4" style={{ transformStyle: 'preserve-3d' }}>
+                <div className="flex flex-col gap-[8px]" style={{ transformStyle: 'preserve-3d' }}>
+                     {SECTION_MAIN.map((row, i) => (
+                        <div key={i} className="flex gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>
+                            {row.map(code => (
+                                <Key3D key={code} code={code} label={LABELS[code]} 
+                                       active={activeKeys.includes(code)} 
+                                       tested={history.has(code)} 
+                                       className={code === 'Escape' ? 'mr-10' : ''} />
+                            ))}
+                        </div>
                      ))}
                 </div>
-                <div className="mt-auto flex flex-col items-center gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>
-                    <Key3D code="ArrowUp" label="↑" active={activeKeys.includes('ArrowUp')} tested={history.has('ArrowUp')} />
-                    <div className="flex gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>
-                        <Key3D code="ArrowLeft" label="←" active={activeKeys.includes('ArrowLeft')} tested={history.has('ArrowLeft')} />
-                        <Key3D code="ArrowDown" label="↓" active={activeKeys.includes('ArrowDown')} tested={history.has('ArrowDown')} />
-                        <Key3D code="ArrowRight" label="→" active={activeKeys.includes('ArrowRight')} tested={history.has('ArrowRight')} />
+                <div className="flex flex-col justify-between" style={{ transformStyle: 'preserve-3d' }}>
+                    <div className="flex flex-col gap-[8px]">
+                         {SECTION_NAV.map((row, i) => (
+                             <div key={i} className="flex gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>
+                                {row.map(code => <Key3D key={code} code={code} label={LABELS[code]} active={activeKeys.includes(code)} tested={history.has(code)} />)}
+                             </div>
+                         ))}
+                    </div>
+                    <div className="mt-auto flex flex-col items-center gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>
+                        <Key3D code="ArrowUp" label="↑" active={activeKeys.includes('ArrowUp')} tested={history.has('ArrowUp')} />
+                        <div className="flex gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>
+                            <Key3D code="ArrowLeft" label="←" active={activeKeys.includes('ArrowLeft')} tested={history.has('ArrowLeft')} />
+                            <Key3D code="ArrowDown" label="↓" active={activeKeys.includes('ArrowDown')} tested={history.has('ArrowDown')} />
+                            <Key3D code="ArrowRight" label="→" active={activeKeys.includes('ArrowRight')} tested={history.has('ArrowRight')} />
+                        </div>
                     </div>
                 </div>
+                <div className="grid grid-cols-4 gap-[6px] w-[225px]" style={{ transformStyle: 'preserve-3d', alignContent: 'start' }}>
+                     <Key3D code="NumLock" label="Num" active={activeKeys.includes("NumLock")} tested={history.has("NumLock")} className="w-full" />
+                     <Key3D code="NumpadDivide" label="/" active={activeKeys.includes("NumpadDivide")} tested={history.has("NumpadDivide")} className="w-full" />
+                     <Key3D code="NumpadMultiply" label="*" active={activeKeys.includes("NumpadMultiply")} tested={history.has("NumpadMultiply")} className="w-full" />
+                     <Key3D code="NumpadSubtract" label="-" active={activeKeys.includes("NumpadSubtract")} tested={history.has("NumpadSubtract")} className="w-full" />
+                     <Key3D code="Numpad7" label="7" active={activeKeys.includes("Numpad7")} tested={history.has("Numpad7")} className="w-full" />
+                     <Key3D code="Numpad8" label="8" active={activeKeys.includes("Numpad8")} tested={history.has("Numpad8")} className="w-full" />
+                     <Key3D code="Numpad9" label="9" active={activeKeys.includes("Numpad9")} tested={history.has("Numpad9")} className="w-full" />
+                     <Key3D code="NumpadAdd" label="+" active={activeKeys.includes("NumpadAdd")} tested={history.has("NumpadAdd")} className="w-full h-full row-span-2 flex items-center" />
+                     <Key3D code="Numpad4" label="4" active={activeKeys.includes("Numpad4")} tested={history.has("Numpad4")} className="w-full" />
+                     <Key3D code="Numpad5" label="5" active={activeKeys.includes("Numpad5")} tested={history.has("Numpad5")} className="w-full" />
+                     <Key3D code="Numpad6" label="6" active={activeKeys.includes("Numpad6")} tested={history.has("Numpad6")} className="w-full" />
+                     <Key3D code="Numpad1" label="1" active={activeKeys.includes("Numpad1")} tested={history.has("Numpad1")} className="w-full" />
+                     <Key3D code="Numpad2" label="2" active={activeKeys.includes("Numpad2")} tested={history.has("Numpad2")} className="w-full" />
+                     <Key3D code="Numpad3" label="3" active={activeKeys.includes("Numpad3")} tested={history.has("Numpad3")} className="w-full" />
+                     <Key3D code="NumpadEnter" label="Ent" active={activeKeys.includes("NumpadEnter")} tested={history.has("NumpadEnter")} className="w-full h-full row-span-2 flex items-center" />
+                     <Key3D code="Numpad0" label="0" active={activeKeys.includes("Numpad0")} tested={history.has("Numpad0")} className="w-full col-span-2" />
+                     <Key3D code="NumpadDecimal" label="." active={activeKeys.includes("NumpadDecimal")} tested={history.has("NumpadDecimal")} className="w-full" />
+                </div>
             </div>
-            <div className="grid grid-cols-4 gap-[6px] w-[225px]" style={{ transformStyle: 'preserve-3d', alignContent: 'start' }}>
-                 <Key3D code="NumLock" label="Num" active={activeKeys.includes("NumLock")} tested={history.has("NumLock")} className="w-full" />
-                 <Key3D code="NumpadDivide" label="/" active={activeKeys.includes("NumpadDivide")} tested={history.has("NumpadDivide")} className="w-full" />
-                 <Key3D code="NumpadMultiply" label="*" active={activeKeys.includes("NumpadMultiply")} tested={history.has("NumpadMultiply")} className="w-full" />
-                 <Key3D code="NumpadSubtract" label="-" active={activeKeys.includes("NumpadSubtract")} tested={history.has("NumpadSubtract")} className="w-full" />
-                 <Key3D code="Numpad7" label="7" active={activeKeys.includes("Numpad7")} tested={history.has("Numpad7")} className="w-full" />
-                 <Key3D code="Numpad8" label="8" active={activeKeys.includes("Numpad8")} tested={history.has("Numpad8")} className="w-full" />
-                 <Key3D code="Numpad9" label="9" active={activeKeys.includes("Numpad9")} tested={history.has("Numpad9")} className="w-full" />
-                 <Key3D code="NumpadAdd" label="+" active={activeKeys.includes("NumpadAdd")} tested={history.has("NumpadAdd")} className="w-full h-full row-span-2 flex items-center" />
-                 <Key3D code="Numpad4" label="4" active={activeKeys.includes("Numpad4")} tested={history.has("Numpad4")} className="w-full" />
-                 <Key3D code="Numpad5" label="5" active={activeKeys.includes("Numpad5")} tested={history.has("Numpad5")} className="w-full" />
-                 <Key3D code="Numpad6" label="6" active={activeKeys.includes("Numpad6")} tested={history.has("Numpad6")} className="w-full" />
-                 <Key3D code="Numpad1" label="1" active={activeKeys.includes("Numpad1")} tested={history.has("Numpad1")} className="w-full" />
-                 <Key3D code="Numpad2" label="2" active={activeKeys.includes("Numpad2")} tested={history.has("Numpad2")} className="w-full" />
-                 <Key3D code="Numpad3" label="3" active={activeKeys.includes("Numpad3")} tested={history.has("Numpad3")} className="w-full" />
-                 <Key3D code="NumpadEnter" label="Ent" active={activeKeys.includes("NumpadEnter")} tested={history.has("NumpadEnter")} className="w-full h-full row-span-2 flex items-center" />
-                 <Key3D code="Numpad0" label="0" active={activeKeys.includes("Numpad0")} tested={history.has("Numpad0")} className="w-full col-span-2" />
-                 <Key3D code="NumpadDecimal" label="." active={activeKeys.includes("NumpadDecimal")} tested={history.has("NumpadDecimal")} className="w-full" />
-            </div>
-        </div>
-      </Keyboard3DWrapper>
+        </Keyboard3DWrapper>
+      );
+  }, [activeKeys, history]);
+
+  return (
+    <div className="w-full flex flex-col items-center justify-center">
+      {/* Рендерим закешированный лэйаут */}
+      {keyboardLayout}
 
       <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="mt-12 glass-panel px-10 py-5 rounded-full flex gap-10 items-center border border-white/10 z-20">
         <div className="text-center group">
@@ -249,6 +270,8 @@ const TesterMode = () => {
     </div>
   );
 };
+
+// ... TypingMode И App КОПИРУЮТСЯ СНИЗУ без изменений по логике (оставляем старое) ...
 
 const TypingMode = () => {
   const [text, setText] = useState("");
