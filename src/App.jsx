@@ -36,7 +36,7 @@ const TEXTS = [
   "В мире цифрового шума чистота дизайна и скорость реакции решают всё."
 ];
 
-// === KEY 3D ===
+// === 3D КЛАВИША (PERFORMANCE EDITION) ===
 const Key3D = memo(({ code, label, active, tested, className = "" }) => {
   let widthClass = 'w-[50px]'; 
   if (className.includes('w-') || className.includes('flex-grow')) widthClass = ''; 
@@ -49,12 +49,13 @@ const Key3D = memo(({ code, label, active, tested, className = "" }) => {
   else if (['MetaLeft', 'MetaRight', 'AltLeft', 'AltRight'].includes(code)) widthClass = 'w-[55px]';
   else if (code === 'Space') widthClass = 'flex-grow';
 
-  // Config: Motion
+  // Config: используем duration для мгновенного отключения тени, чтобы не мылило при движении
   const transitionConfig = {
-      transform: { type: "spring", stiffness: 1200, damping: 30, mass: 0.5 },
+      transform: { type: "spring", stiffness: 1500, damping: 20, mass: 0.2 }, // Супер-быстрая пружина
       backgroundColor: { duration: 0.05 },
       boxShadow: { duration: 0.05 },
-      borderColor: { duration: 0.1 }
+      borderColor: { duration: 0.05 },
+      borderBottomWidth: { duration: 0.05 }
   };
 
   return (
@@ -62,47 +63,51 @@ const Key3D = memo(({ code, label, active, tested, className = "" }) => {
       <motion.div
         initial={false}
         animate={{
-            transform: active ? "translateZ(2px)" : "translateZ(8px)",
-            backgroundColor: active ? '#6366f1' : tested ? 'rgba(99, 102, 241, 0.15)' : 'rgba(30, 41, 59, 0.65)',
-            boxShadow: active ? '0 0 35px rgba(99, 102, 241, 0.8), inset 0 0 10px rgba(255,255,255,0.4)' : '0 4px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)',
-            borderColor: active ? '#a5b4fc' : tested ? '#6366f1' : 'rgba(255,255,255,0.08)'
+            transform: active ? "translateZ(2px)" : "translateZ(6px)",
+            // ЦВЕТА
+            backgroundColor: active ? '#6366f1' : tested ? 'rgba(99, 102, 241, 0.15)' : 'rgba(30, 41, 59, 0.7)',
+            borderColor: active ? '#a5b4fc' : tested ? '#6366f1' : 'rgba(255,255,255,0.08)',
+            // 3D ТРЮК: Убрали сложную inset тень. Вместо нее меняем ширину нижнего бордера
+            borderBottomWidth: active ? '0px' : '4px',
+            borderBottomColor: 'rgba(0,0,0,0.4)',
+            // СВЕЧЕНИЕ только при активе. В покое - нет теней (GPU отдыхает)
+            boxShadow: active ? '0 0 25px rgba(99, 102, 241, 0.8)' : 'none',
         }}
         transition={transitionConfig}
-        className="w-full h-full rounded-md border flex items-center justify-center relative select-none will-change-transform"
+        className="w-full h-full rounded-md border-t border-l border-r flex items-center justify-center relative select-none box-border"
       >
-        {/* Anti-blur trick: slightly brighter text on tested keys */}
-        <span className={`font-mono font-bold text-[10px] sm:text-xs uppercase tracking-wider ${active ? 'text-white' : tested ? 'text-indigo-300' : 'text-slate-400'}`} 
-              style={{ textShadow: tested ? '0 0 1px rgba(99, 102, 241, 0.5)' : 'none' }}>
+        <span className={`font-mono font-bold text-[10px] sm:text-xs uppercase tracking-wider ${active ? 'text-white' : tested ? 'text-indigo-300' : 'text-slate-400'}`}
+              style={{ transform: active ? 'translateY(0px)' : 'translateY(-2px)' }} /* Компенсация движения текста */ >
             {label || code.replace('Key', '').replace('Digit', '')}
         </span>
+        
+        {/* Статичный градиент-блик */}
         <div className="absolute top-0 left-0 right-0 h-[40%] bg-gradient-to-b from-white/10 to-transparent rounded-t-md pointer-events-none" />
       </motion.div>
     </div>
   );
 });
 
-// === KEYBOARD WRAPPER (ГЛАВНАЯ ОПТИМИЗАЦИЯ ТУТ) ===
+// === KEYBOARD WRAPPER ===
 const Keyboard3DWrapper = ({ children }) => {
+    // Враппер использует нативные события через Ref (не обновляет стейт)
     const x = useMotionValue(0);
     const y = useMotionValue(0);
 
-    const smoothX = useSpring(x, { stiffness: 50, damping: 20 });
-    const smoothY = useSpring(y, { stiffness: 50, damping: 20 });
+    const smoothX = useSpring(x, { stiffness: 40, damping: 25 }); // Помягче пружина чтобы не дрожало
+    const smoothY = useSpring(y, { stiffness: 40, damping: 25 });
 
-    const rotateX = useTransform(smoothY, [-0.5, 0.5], ["10deg", "-10deg"]);
-    const rotateY = useTransform(smoothX, [-0.5, 0.5], ["-10deg", "10deg"]);
+    const rotateX = useTransform(smoothY, [-0.5, 0.5], ["8deg", "-8deg"]);
+    const rotateY = useTransform(smoothX, [-0.5, 0.5], ["-8deg", "8deg"]);
 
-    // ИСПОЛЬЗУЕМ НАТИВНЫЙ LISTENER ДЛЯ ПРОИЗВОДИТЕЛЬНОСТИ
     useEffect(() => {
         const handleMouseMove = (e) => {
-            // Прямая математика без React overhead
             const w = window.innerWidth;
             const h = window.innerHeight;
             x.set((e.clientX / w) - 0.5);
             y.set((e.clientY / h) - 0.5);
         };
-
-        // passive: true - говорит браузеру не ждать обработчика событий для отрисовки скролла/кадра
+        // Passive listeners не блокируют поток
         window.addEventListener('mousemove', handleMouseMove, { passive: true });
         return () => window.removeEventListener('mousemove', handleMouseMove);
     }, [x, y]);
@@ -111,25 +116,25 @@ const Keyboard3DWrapper = ({ children }) => {
         <div className="w-full min-h-[60vh] flex items-center justify-center perspective-container">
             <motion.div 
                 style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-                // ВОЗВРАЩАЕМ WILL-CHANGE, но без backface-visibility
-                className="relative will-change-transform"
+                // Убран will-change, на быстрых GPU он иногда вызывает баги рендеринга текста (мыло)
+                className="relative" 
             >
-                {/* Корпус */}
+                {/* Корпус (остался без изменений, он статичен) */}
                 <div className="absolute inset-0 bg-[#0f172a] rounded-[28px]"
-                    style={{ transform: "translateZ(-25px) translateY(12px) translateX(8px)", boxShadow: '0 50px 80px -20px rgba(0,0,0,0.9)' }}
+                    style={{ transform: "translateZ(-20px) translateY(8px) translateX(6px)", boxShadow: '0 40px 60px -15px rgba(0,0,0,0.8)' }}
                 />
-                <div className="absolute inset-0 bg-[#1e293b] rounded-[28px]" style={{ transform: "translateZ(-12px)" }} />
+                <div className="absolute inset-0 bg-[#1e293b] rounded-[28px]" style={{ transform: "translateZ(-8px)" }} />
                 
-                {/* Плита */}
+                {/* Plate */}
                 <div 
-                    className="bg-[#111827] p-5 rounded-[24px] border-[3px] border-[#1e293b] relative"
-                    style={{ transformStyle: "preserve-3d", background: 'linear-gradient(145deg, #1f2937, #111827)' }}
+                    className="bg-[#111827] p-5 rounded-[24px] border-[2px] border-[#1e293b] relative"
+                    style={{ transformStyle: "preserve-3d", background: '#111827' }} // Убрал градиент на фоне (меньше banding'а)
                 >
                     {children}
                     
                     <div className="absolute top-4 left-6 flex items-center gap-2 pointer-events-none opacity-80" style={{ transform: "translateZ(1px)" }}>
-                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_10px_#6366f1]"></div>
-                         <span className="text-[9px] text-slate-400 font-mono tracking-widest font-bold">Krakusha</span>
+                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]"></div>
+                         <span className="text-[9px] text-slate-500 font-mono tracking-widest font-bold">KeiX 3D</span>
                     </div>
                 </div>
             </motion.div>
@@ -137,7 +142,9 @@ const Keyboard3DWrapper = ({ children }) => {
     );
 };
 
-// 2. Тестер
+// ... TesterMode и TypingMode и App остаются почти такими же, 
+// но копируем полностью для надежности, чтобы структура была единой.
+
 const TesterMode = () => {
   const [activeKeys, setActiveKeys] = useState([]);
   const [history, setHistory] = useState(new Set());
@@ -153,7 +160,6 @@ const TesterMode = () => {
       setLastKey(c);
     };
     const handleUp = (e) => setActiveKeys(p => p.filter(k => k !== e.code));
-
     window.addEventListener('keydown', handleDown);
     window.addEventListener('keyup', handleUp);
     return () => { 
