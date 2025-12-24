@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform, useSpring, LayoutGroup, useAnimationFrame } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import AnimatedBackground from './components/AnimatedBackground';
 import CustomCursor from './components/CustomCursor';
@@ -20,9 +20,16 @@ const SECTION_NAV = [
   ['Delete', 'End', 'PageDown']
 ];
 
+// Иконка Windows (SVG)
+const WIN_ICON = (
+  <svg viewBox="0 0 88 88" fill="currentColor" className="w-3.5 h-3.5">
+    <path d="M0 12.402l35.687-4.86.016 34.423-35.67.203zm35.703 33.601l-.016 34.683-35.654-4.908L.065 46.16zM40.16 6.47L87.974 0v41.51l-47.814.266zM88 46.31v41.67L40.144 81.3l.016-34.793z" />
+  </svg>
+);
+
 const LABELS = {
   Backquote: '~', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Space: '', 
-  ControlLeft: 'Ctrl', MetaLeft: 'Win', AltLeft: 'Alt', ControlRight: 'Ctrl', MetaRight: 'Win', AltRight: 'Alt', ShiftLeft: 'Shift', ShiftRight: 'Shift', Backspace: 'Backspace', Enter: 'Enter', CapsLock: 'Caps', Tab: 'Tab', ContextMenu: 'Fn', Escape: 'ESC',
+  ControlLeft: 'Ctrl', MetaLeft: WIN_ICON, AltLeft: 'Alt', ControlRight: 'Ctrl', MetaRight: WIN_ICON, AltRight: 'Alt', ShiftLeft: 'Shift', ShiftRight: 'Shift', Backspace: 'Backspace', Enter: 'Enter', CapsLock: 'Caps', Tab: 'Tab', ContextMenu: 'Fn', Escape: 'ESC',
   PrintScreen: 'PrSc', ScrollLock: 'ScLk', Pause: 'Pause', Insert: 'Ins', Home: 'Home', PageUp: 'PgUp', Delete: 'Del', End: 'End', PageDown: 'PgDn',
   ArrowUp: '↑', ArrowLeft: '←', ArrowDown: '↓', ArrowRight: '→',
   NumLock: 'Num', NumpadDivide: '/', NumpadMultiply: '*', NumpadSubtract: '-', NumpadAdd: '+', NumpadEnter: 'Ent', NumpadDecimal: '.',
@@ -36,8 +43,8 @@ const TEXTS = [
   "В мире цифрового шума чистота дизайна и скорость реакции решают всё."
 ];
 
-// === KEY 3D ===
-const Key3D = memo(({ code, label, active, tested, className = "" }) => {
+// === FLAT KEY ===
+const Key = memo(({ code, label, active, tested, className = "" }) => {
   let widthClass = 'w-[50px]'; 
   if (className.includes('w-') || className.includes('flex-grow')) widthClass = ''; 
   else if (code === 'Backspace') widthClass = 'w-[90px]';
@@ -49,105 +56,45 @@ const Key3D = memo(({ code, label, active, tested, className = "" }) => {
   else if (['MetaLeft', 'MetaRight', 'AltLeft', 'AltRight'].includes(code)) widthClass = 'w-[55px]';
   else if (code === 'Space') widthClass = 'flex-grow';
 
-  // Config: Motion
-  const transitionConfig = {
-      transform: { type: "spring", stiffness: 1200, damping: 30, mass: 0.5 },
-      backgroundColor: { duration: 0.05 },
-      boxShadow: { duration: 0.05 },
-      borderColor: { duration: 0.1 }
-  };
-
   return (
-    <div className={`relative h-[50px] ${widthClass} ${className}`} style={{ transformStyle: 'preserve-3d' }}>
+    <div className={`relative h-[50px] ${widthClass} ${className}`}>
       <motion.div
         initial={false}
         animate={{
-            transform: active ? "translateZ(2px)" : "translateZ(8px)",
-            backgroundColor: active ? '#6366f1' : tested ? 'rgba(99, 102, 241, 0.15)' : 'rgba(30, 41, 59, 0.65)',
-            boxShadow: active ? '0 0 35px rgba(99, 102, 241, 0.8), inset 0 0 10px rgba(255,255,255,0.4)' : '0 4px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)',
-            borderColor: active ? '#a5b4fc' : tested ? '#6366f1' : 'rgba(255,255,255,0.08)'
+            backgroundColor: active ? '#6366f1' : tested ? 'rgba(99, 102, 241, 0.15)' : 'rgba(30, 41, 59, 0.4)',
+            scale: active ? 0.92 : 1, 
+            borderColor: active ? '#818cf8' : tested ? '#6366f1' : 'rgba(255,255,255,0.1)',
+            boxShadow: active 
+                ? '0 0 20px rgba(99, 102, 241, 0.6)' 
+                : '0 4px 0 rgba(0,0,0,0.3)'
         }}
-        transition={transitionConfig}
-        className="w-full h-full rounded-md border flex items-center justify-center relative select-none will-change-transform"
+        transition={{ duration: 0.1 }}
+        className="w-full h-full rounded-lg border flex items-center justify-center relative select-none cursor-pointer"
       >
-        <span className={`font-mono font-bold text-[10px] sm:text-xs uppercase tracking-wider ${active ? 'text-white' : tested ? 'text-indigo-300' : 'text-slate-400'}`} 
-              style={{ textShadow: tested ? '0 0 1px rgba(99, 102, 241, 0.5)' : 'none' }}>
+        <span className={`font-mono font-bold text-[10px] sm:text-xs uppercase tracking-wider flex items-center justify-center ${active ? 'text-white' : tested ? 'text-indigo-300' : 'text-slate-400'}`}>
             {label || code.replace('Key', '').replace('Digit', '')}
         </span>
-        <div className="absolute top-0 left-0 right-0 h-[40%] bg-gradient-to-b from-white/10 to-transparent rounded-t-md pointer-events-none" />
       </motion.div>
     </div>
   );
 });
 
-// === KEYBOARD WRAPPER (ОПТИМИЗИРОВАННАЯ ВЕРСИЯ) ===
-const Keyboard3DWrapper = ({ children }) => {
-    const x = useMotionValue(0);
-    const y = useMotionValue(0);
-    
-    // Используем refs для хранения "сырых" координат, чтобы не вызывать ререндеры
-    const targetX = useRef(0);
-    const targetY = useRef(0);
-
-    const smoothX = useSpring(x, { stiffness: 40, damping: 25, mass: 0.8 }); // Чуть мягче настройки для плавности
-    const smoothY = useSpring(y, { stiffness: 40, damping: 25, mass: 0.8 });
-
-    const rotateX = useTransform(smoothY, [-0.5, 0.5], ["10deg", "-10deg"]);
-    const rotateY = useTransform(smoothX, [-0.5, 0.5], ["-10deg", "10deg"]);
-
-    // 1. Облегченный листенер. Он просто обновляет переменную, не вызывая React Render и не дергая Motion
-    useEffect(() => {
-        const handleMouseMove = (e) => {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            targetX.current = (e.clientX / w) - 0.5;
-            targetY.current = (e.clientY / h) - 0.5;
-        };
-
-        window.addEventListener('mousemove', handleMouseMove, { passive: true });
-        return () => window.removeEventListener('mousemove', handleMouseMove);
-    }, []);
-
-    // 2. useAnimationFrame синхронизирует обновление значений с герцовкой монитора.
-    // Это убивает лаги, так как мы не пытаемся обновлять стили чаще, чем экран может показать.
-    useAnimationFrame(() => {
-        const currentX = x.get();
-        const currentY = y.get();
-        
-        // Маленькая оптимизация: обновляем только если есть разница
-        if (Math.abs(currentX - targetX.current) > 0.001) {
-             x.set(targetX.current);
-        }
-        if (Math.abs(currentY - targetY.current) > 0.001) {
-             y.set(targetY.current);
-        }
-    });
-
+// === FLAT KEYBOARD CONTAINER ===
+const KeyboardFlatWrapper = ({ children }) => {
     return (
-        <div className="w-full min-h-[60vh] flex items-center justify-center perspective-container">
-            <motion.div 
-                style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-                className="relative will-change-transform"
-            >
-                {/* Корпус */}
-                <div className="absolute inset-0 bg-[#0f172a] rounded-[28px]"
-                    style={{ transform: "translateZ(-25px) translateY(12px) translateX(8px)", boxShadow: '0 50px 80px -20px rgba(0,0,0,0.9)' }}
-                />
-                <div className="absolute inset-0 bg-[#1e293b] rounded-[28px]" style={{ transform: "translateZ(-12px)" }} />
-                
-                {/* Плита */}
-                <div 
-                    className="bg-[#111827] p-5 rounded-[24px] border-[3px] border-[#1e293b] relative"
-                    style={{ transformStyle: "preserve-3d", background: 'linear-gradient(145deg, #1f2937, #111827)' }}
-                >
+        <div className="w-full flex items-center justify-center py-10">
+            {/* Стеклянная подложка */}
+            <div className="bg-[#0f172a]/60 backdrop-blur-xl p-6 rounded-[32px] border border-white/5 shadow-2xl ring-1 ring-white/10">
+                <div className="flex flex-col gap-2 relative">
                     {children}
                     
-                    <div className="absolute top-4 left-6 flex items-center gap-2 pointer-events-none opacity-80" style={{ transform: "translateZ(1px)" }}>
-                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_10px_#6366f1]"></div>
+                    {/* Branding */}
+                    <div className="absolute -top-3 left-1 flex items-center gap-2 pointer-events-none opacity-60">
+                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]"></div>
                          <span className="text-[9px] text-slate-400 font-mono tracking-widest font-bold">Krakusha</span>
                     </div>
                 </div>
-            </motion.div>
+            </div>
         </div>
     );
 };
@@ -179,55 +126,55 @@ const TesterMode = () => {
 
   return (
     <div className="w-full flex flex-col items-center justify-center">
-      <Keyboard3DWrapper>
-        <div className="flex gap-4 p-4" style={{ transformStyle: 'preserve-3d' }}>
-            <div className="flex flex-col gap-[8px]" style={{ transformStyle: 'preserve-3d' }}>
+      <KeyboardFlatWrapper>
+        <div className="flex gap-4">
+            <div className="flex flex-col gap-[8px]">
                  {SECTION_MAIN.map((row, i) => (
-                    <div key={i} className="flex gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>
+                    <div key={i} className="flex gap-[6px]">
                         {row.map(code => (
-                            <Key3D key={code} code={code} label={LABELS[code]} active={activeKeys.includes(code)} tested={history.has(code)} className={code === 'Escape' ? 'mr-10' : ''} />
+                            <Key key={code} code={code} label={LABELS[code]} active={activeKeys.includes(code)} tested={history.has(code)} className={code === 'Escape' ? 'mr-10' : ''} />
                         ))}
                     </div>
                  ))}
             </div>
-            <div className="flex flex-col justify-between" style={{ transformStyle: 'preserve-3d' }}>
+            <div className="flex flex-col justify-between">
                 <div className="flex flex-col gap-[8px]">
                      {SECTION_NAV.map((row, i) => (
-                         <div key={i} className="flex gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>{row.map(code => <Key3D key={code} code={code} label={LABELS[code]} active={activeKeys.includes(code)} tested={history.has(code)} />)}</div>
+                         <div key={i} className="flex gap-[6px]">{row.map(code => <Key key={code} code={code} label={LABELS[code]} active={activeKeys.includes(code)} tested={history.has(code)} />)}</div>
                      ))}
                 </div>
-                <div className="mt-auto flex flex-col items-center gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>
-                    <Key3D code="ArrowUp" label="↑" active={activeKeys.includes('ArrowUp')} tested={history.has('ArrowUp')} />
-                    <div className="flex gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>
-                        <Key3D code="ArrowLeft" label="←" active={activeKeys.includes('ArrowLeft')} tested={history.has('ArrowLeft')} />
-                        <Key3D code="ArrowDown" label="↓" active={activeKeys.includes('ArrowDown')} tested={history.has('ArrowDown')} />
-                        <Key3D code="ArrowRight" label="→" active={activeKeys.includes('ArrowRight')} tested={history.has('ArrowRight')} />
+                <div className="mt-auto flex flex-col items-center gap-[6px]">
+                    <Key code="ArrowUp" label="↑" active={activeKeys.includes('ArrowUp')} tested={history.has('ArrowUp')} />
+                    <div className="flex gap-[6px]">
+                        <Key code="ArrowLeft" label="←" active={activeKeys.includes('ArrowLeft')} tested={history.has('ArrowLeft')} />
+                        <Key code="ArrowDown" label="↓" active={activeKeys.includes('ArrowDown')} tested={history.has('ArrowDown')} />
+                        <Key code="ArrowRight" label="→" active={activeKeys.includes('ArrowRight')} tested={history.has('ArrowRight')} />
                     </div>
                 </div>
             </div>
-            <div className="grid grid-cols-4 gap-[6px] w-[225px]" style={{ transformStyle: 'preserve-3d', alignContent: 'start' }}>
-                 <Key3D code="NumLock" label="Num" active={activeKeys.includes("NumLock")} tested={history.has("NumLock")} className="w-full" />
-                 <Key3D code="NumpadDivide" label="/" active={activeKeys.includes("NumpadDivide")} tested={history.has("NumpadDivide")} className="w-full" />
-                 <Key3D code="NumpadMultiply" label="*" active={activeKeys.includes("NumpadMultiply")} tested={history.has("NumpadMultiply")} className="w-full" />
-                 <Key3D code="NumpadSubtract" label="-" active={activeKeys.includes("NumpadSubtract")} tested={history.has("NumpadSubtract")} className="w-full" />
-                 <Key3D code="Numpad7" label="7" active={activeKeys.includes("Numpad7")} tested={history.has("Numpad7")} className="w-full" />
-                 <Key3D code="Numpad8" label="8" active={activeKeys.includes("Numpad8")} tested={history.has("Numpad8")} className="w-full" />
-                 <Key3D code="Numpad9" label="9" active={activeKeys.includes("Numpad9")} tested={history.has("Numpad9")} className="w-full" />
-                 <Key3D code="NumpadAdd" label="+" active={activeKeys.includes("NumpadAdd")} tested={history.has("NumpadAdd")} className="w-full h-full row-span-2 flex items-center" />
-                 <Key3D code="Numpad4" label="4" active={activeKeys.includes("Numpad4")} tested={history.has("Numpad4")} className="w-full" />
-                 <Key3D code="Numpad5" label="5" active={activeKeys.includes("Numpad5")} tested={history.has("Numpad5")} className="w-full" />
-                 <Key3D code="Numpad6" label="6" active={activeKeys.includes("Numpad6")} tested={history.has("Numpad6")} className="w-full" />
-                 <Key3D code="Numpad1" label="1" active={activeKeys.includes("Numpad1")} tested={history.has("Numpad1")} className="w-full" />
-                 <Key3D code="Numpad2" label="2" active={activeKeys.includes("Numpad2")} tested={history.has("Numpad2")} className="w-full" />
-                 <Key3D code="Numpad3" label="3" active={activeKeys.includes("Numpad3")} tested={history.has("Numpad3")} className="w-full" />
-                 <Key3D code="NumpadEnter" label="Ent" active={activeKeys.includes("NumpadEnter")} tested={history.has("NumpadEnter")} className="w-full h-full row-span-2 flex items-center" />
-                 <Key3D code="Numpad0" label="0" active={activeKeys.includes("Numpad0")} tested={history.has("Numpad0")} className="w-full col-span-2" />
-                 <Key3D code="NumpadDecimal" label="." active={activeKeys.includes("NumpadDecimal")} tested={history.has("NumpadDecimal")} className="w-full" />
+            <div className="grid grid-cols-4 gap-[6px] w-[225px] content-start">
+                 <Key code="NumLock" label="Num" active={activeKeys.includes("NumLock")} tested={history.has("NumLock")} className="w-full" />
+                 <Key code="NumpadDivide" label="/" active={activeKeys.includes("NumpadDivide")} tested={history.has("NumpadDivide")} className="w-full" />
+                 <Key code="NumpadMultiply" label="*" active={activeKeys.includes("NumpadMultiply")} tested={history.has("NumpadMultiply")} className="w-full" />
+                 <Key code="NumpadSubtract" label="-" active={activeKeys.includes("NumpadSubtract")} tested={history.has("NumpadSubtract")} className="w-full" />
+                 <Key code="Numpad7" label="7" active={activeKeys.includes("Numpad7")} tested={history.has("Numpad7")} className="w-full" />
+                 <Key code="Numpad8" label="8" active={activeKeys.includes("Numpad8")} tested={history.has("Numpad8")} className="w-full" />
+                 <Key code="Numpad9" label="9" active={activeKeys.includes("Numpad9")} tested={history.has("Numpad9")} className="w-full" />
+                 <Key code="NumpadAdd" label="+" active={activeKeys.includes("NumpadAdd")} tested={history.has("NumpadAdd")} className="w-full h-full row-span-2 flex items-center" />
+                 <Key code="Numpad4" label="4" active={activeKeys.includes("Numpad4")} tested={history.has("Numpad4")} className="w-full" />
+                 <Key code="Numpad5" label="5" active={activeKeys.includes("Numpad5")} tested={history.has("Numpad5")} className="w-full" />
+                 <Key code="Numpad6" label="6" active={activeKeys.includes("Numpad6")} tested={history.has("Numpad6")} className="w-full" />
+                 <Key code="Numpad1" label="1" active={activeKeys.includes("Numpad1")} tested={history.has("Numpad1")} className="w-full" />
+                 <Key code="Numpad2" label="2" active={activeKeys.includes("Numpad2")} tested={history.has("Numpad2")} className="w-full" />
+                 <Key code="Numpad3" label="3" active={activeKeys.includes("Numpad3")} tested={history.has("Numpad3")} className="w-full" />
+                 <Key code="NumpadEnter" label="Ent" active={activeKeys.includes("NumpadEnter")} tested={history.has("NumpadEnter")} className="w-full h-full row-span-2 flex items-center" />
+                 <Key code="Numpad0" label="0" active={activeKeys.includes("Numpad0")} tested={history.has("Numpad0")} className="w-full col-span-2" />
+                 <Key code="NumpadDecimal" label="." active={activeKeys.includes("NumpadDecimal")} tested={history.has("NumpadDecimal")} className="w-full" />
             </div>
         </div>
-      </Keyboard3DWrapper>
+      </KeyboardFlatWrapper>
 
-      <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="mt-12 glass-panel px-10 py-5 rounded-full flex gap-10 items-center border border-white/10 z-20">
+      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="mt-8 glass-panel px-10 py-5 rounded-full flex gap-10 items-center border border-white/10 z-20">
         <div className="text-center group">
             <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1 group-hover:text-indigo-400 transition-colors">Pressed</div>
             <div className="font-mono text-2xl text-white">{history.size}</div>
@@ -240,13 +187,13 @@ const TesterMode = () => {
                     {lastKey && (
                         <motion.span
                             key={lastKey}
-                            initial={{ opacity: 0, scale: 0.5, y: 10, filter: "blur(5px)" }}
-                            animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
-                            exit={{ opacity: 0, scale: 0.9, y: -10 }}
-                            transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                            className="block whitespace-nowrap drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]"
+                            initial={{ opacity: 0, scale: 0.8, y: 5 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: -5 }}
+                            className="block whitespace-nowrap drop-shadow-[0_0_8px_rgba(99,102,241,0.5)] flex items-center justify-center"
                         >
-                            {LABELS[lastKey] || lastKey.replace('Key', '')}
+                            {/* Если это иконка (объект), рендерим как есть, иначе текст */}
+                            {React.isValidElement(LABELS[lastKey]) ? LABELS[lastKey] : (LABELS[lastKey] || lastKey.replace('Key', ''))}
                         </motion.span>
                     )}
                  </AnimatePresence>
@@ -294,10 +241,9 @@ const TypingMode = () => {
   const liveWpm = started && !finished && startTime ? Math.round((input.length/5) / ((Date.now() - startTime)/60000)) || 0 : stats.wpm;
 
   return (
-    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-5xl mx-auto flex flex-col items-center mt-20 perspective-container">
+    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-5xl mx-auto flex flex-col items-center mt-20">
       <div 
-        className="w-full bg-[#1e293b]/60 p-16 rounded-[40px] border border-white/5 relative overflow-hidden backdrop-blur-xl"
-        style={{ transform: 'rotateX(5deg)', transformStyle: 'preserve-3d' }}
+        className="w-full bg-[#1e293b]/50 p-16 rounded-[40px] border border-white/5 relative overflow-hidden backdrop-blur-xl shadow-2xl"
       >
         <div className="flex justify-between items-end mb-12 relative z-10">
           <div>
