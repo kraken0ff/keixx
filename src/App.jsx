@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform, useSpring, LayoutGroup } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring, LayoutGroup, useAnimationFrame } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import AnimatedBackground from './components/AnimatedBackground';
 import CustomCursor from './components/CustomCursor';
 
-// === CONSTANTS ===
+// === КОНСТАНТЫ ===
 const SECTION_MAIN = [
   ['Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'],
   ['Backquote', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal', 'Backspace'],
@@ -36,8 +36,7 @@ const TEXTS = [
   "В мире цифрового шума чистота дизайна и скорость реакции решают всё."
 ];
 
-// === KEY 3D (STABLE & BEAUTIFUL) ===
-// Простой memo без кастомных компараторов - React сам отлично справляется на 60fps
+// === KEY 3D ===
 const Key3D = memo(({ code, label, active, tested, className = "" }) => {
   let widthClass = 'w-[50px]'; 
   if (className.includes('w-') || className.includes('flex-grow')) widthClass = ''; 
@@ -50,90 +49,102 @@ const Key3D = memo(({ code, label, active, tested, className = "" }) => {
   else if (['MetaLeft', 'MetaRight', 'AltLeft', 'AltRight'].includes(code)) widthClass = 'w-[55px]';
   else if (code === 'Space') widthClass = 'flex-grow';
 
+  // Config: Motion
+  const transitionConfig = {
+      transform: { type: "spring", stiffness: 1200, damping: 30, mass: 0.5 },
+      backgroundColor: { duration: 0.05 },
+      boxShadow: { duration: 0.05 },
+      borderColor: { duration: 0.1 }
+  };
+
   return (
     <div className={`relative h-[50px] ${widthClass} ${className}`} style={{ transformStyle: 'preserve-3d' }}>
       <motion.div
         initial={false}
         animate={{
-            // Плавный ход 4px (с 6 до 2)
-            transform: active ? "translateZ(2px)" : "translateZ(6px)",
-            // Возвращаем сочные цвета
+            transform: active ? "translateZ(2px)" : "translateZ(8px)",
             backgroundColor: active ? '#6366f1' : tested ? 'rgba(99, 102, 241, 0.15)' : 'rgba(30, 41, 59, 0.65)',
-            borderColor: active ? '#a5b4fc' : tested ? '#6366f1' : 'rgba(255,255,255,0.08)',
-            // Возвращаем красивую тень при нажатии (glow)
-            boxShadow: active 
-                ? '0 0 20px rgba(99, 102, 241, 0.6), inset 0 0 8px rgba(255,255,255,0.3)' 
-                : '0 4px 6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)',
+            boxShadow: active ? '0 0 35px rgba(99, 102, 241, 0.8), inset 0 0 10px rgba(255,255,255,0.4)' : '0 4px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)',
+            borderColor: active ? '#a5b4fc' : tested ? '#6366f1' : 'rgba(255,255,255,0.08)'
         }}
-        // Единая плавная пружина для всего.
-        // Stiffness 400 - это "золотая середина" между скоростью и мягкостью (Apple-style)
-        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-        className="w-full h-full rounded-md border flex items-center justify-center relative select-none"
+        transition={transitionConfig}
+        className="w-full h-full rounded-md border flex items-center justify-center relative select-none will-change-transform"
       >
-        {/* Боковинка кнопки (симуляция 3D через псевдо-бордер внизу) */}
-        {!active && (
-             <div className="absolute inset-x-0 -bottom-[4px] h-[4px] bg-[#0f172a]/80 rounded-b-md" />
-        )}
-
-        <span className={`font-mono font-bold text-[10px] sm:text-xs uppercase tracking-wider z-10 ${active ? 'text-white' : tested ? 'text-indigo-300' : 'text-slate-400'}`}>
+        <span className={`font-mono font-bold text-[10px] sm:text-xs uppercase tracking-wider ${active ? 'text-white' : tested ? 'text-indigo-300' : 'text-slate-400'}`} 
+              style={{ textShadow: tested ? '0 0 1px rgba(99, 102, 241, 0.5)' : 'none' }}>
             {label || code.replace('Key', '').replace('Digit', '')}
         </span>
-        
-        {/* Красивый блик возвращен */}
         <div className="absolute top-0 left-0 right-0 h-[40%] bg-gradient-to-b from-white/10 to-transparent rounded-t-md pointer-events-none" />
       </motion.div>
     </div>
   );
 });
 
-// === KEYBOARD WRAPPER ===
+// === KEYBOARD WRAPPER (ОПТИМИЗИРОВАННАЯ ВЕРСИЯ) ===
 const Keyboard3DWrapper = ({ children }) => {
     const x = useMotionValue(0);
     const y = useMotionValue(0);
+    
+    // Используем refs для хранения "сырых" координат, чтобы не вызывать ререндеры
+    const targetX = useRef(0);
+    const targetY = useRef(0);
 
-    const smoothX = useSpring(x, { stiffness: 40, damping: 20 });
-    const smoothY = useSpring(y, { stiffness: 40, damping: 20 });
+    const smoothX = useSpring(x, { stiffness: 40, damping: 25, mass: 0.8 }); // Чуть мягче настройки для плавности
+    const smoothY = useSpring(y, { stiffness: 40, damping: 25, mass: 0.8 });
 
-    const rotateX = useTransform(smoothY, [-0.5, 0.5], ["7deg", "-7deg"]);
-    const rotateY = useTransform(smoothX, [-0.5, 0.5], ["-7deg", "7deg"]);
+    const rotateX = useTransform(smoothY, [-0.5, 0.5], ["10deg", "-10deg"]);
+    const rotateY = useTransform(smoothX, [-0.5, 0.5], ["-10deg", "10deg"]);
 
+    // 1. Облегченный листенер. Он просто обновляет переменную, не вызывая React Render и не дергая Motion
     useEffect(() => {
         const handleMouseMove = (e) => {
-            // Обычная обработка без фанатизма, 60 раз в секунду
             const w = window.innerWidth;
             const h = window.innerHeight;
-            x.set((e.clientX / w) - 0.5);
-            y.set((e.clientY / h) - 0.5);
+            targetX.current = (e.clientX / w) - 0.5;
+            targetY.current = (e.clientY / h) - 0.5;
         };
-        window.addEventListener('mousemove', handleMouseMove);
+
+        window.addEventListener('mousemove', handleMouseMove, { passive: true });
         return () => window.removeEventListener('mousemove', handleMouseMove);
-    }, [x, y]);
+    }, []);
+
+    // 2. useAnimationFrame синхронизирует обновление значений с герцовкой монитора.
+    // Это убивает лаги, так как мы не пытаемся обновлять стили чаще, чем экран может показать.
+    useAnimationFrame(() => {
+        const currentX = x.get();
+        const currentY = y.get();
+        
+        // Маленькая оптимизация: обновляем только если есть разница
+        if (Math.abs(currentX - targetX.current) > 0.001) {
+             x.set(targetX.current);
+        }
+        if (Math.abs(currentY - targetY.current) > 0.001) {
+             y.set(targetY.current);
+        }
+    });
 
     return (
         <div className="w-full min-h-[60vh] flex items-center justify-center perspective-container">
             <motion.div 
                 style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-                className="relative"
+                className="relative will-change-transform"
             >
-                {/* Корпус клавиатуры */}
+                {/* Корпус */}
                 <div className="absolute inset-0 bg-[#0f172a] rounded-[28px]"
-                    style={{ 
-                        transform: "translateZ(-20px) translateY(10px) translateX(5px)", 
-                        // Хорошая мягкая тень
-                        boxShadow: '0 30px 60px -10px rgba(0,0,0,0.8)' 
-                    }}
+                    style={{ transform: "translateZ(-25px) translateY(12px) translateX(8px)", boxShadow: '0 50px 80px -20px rgba(0,0,0,0.9)' }}
                 />
-                <div className="absolute inset-0 bg-[#1e293b] rounded-[28px]" style={{ transform: "translateZ(-8px)" }} />
+                <div className="absolute inset-0 bg-[#1e293b] rounded-[28px]" style={{ transform: "translateZ(-12px)" }} />
                 
-                {/* Plate */}
+                {/* Плита */}
                 <div 
-                    className="bg-[#111827] p-5 rounded-[24px] border-[2px] border-[#1e293b] relative"
-                    style={{ transformStyle: "preserve-3d" }}
+                    className="bg-[#111827] p-5 rounded-[24px] border-[3px] border-[#1e293b] relative"
+                    style={{ transformStyle: "preserve-3d", background: 'linear-gradient(145deg, #1f2937, #111827)' }}
                 >
                     {children}
+                    
                     <div className="absolute top-4 left-6 flex items-center gap-2 pointer-events-none opacity-80" style={{ transform: "translateZ(1px)" }}>
-                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]"></div>
-                         <span className="text-[9px] text-slate-500 font-mono tracking-widest font-bold">Krakusha</span>
+                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_10px_#6366f1]"></div>
+                         <span className="text-[9px] text-slate-400 font-mono tracking-widest font-bold">Krakusha</span>
                     </div>
                 </div>
             </motion.div>
@@ -141,6 +152,7 @@ const Keyboard3DWrapper = ({ children }) => {
     );
 };
 
+// 2. Тестер
 const TesterMode = () => {
   const [activeKeys, setActiveKeys] = useState([]);
   const [history, setHistory] = useState(new Set());
@@ -169,20 +181,15 @@ const TesterMode = () => {
     <div className="w-full flex flex-col items-center justify-center">
       <Keyboard3DWrapper>
         <div className="flex gap-4 p-4" style={{ transformStyle: 'preserve-3d' }}>
-            {/* MAIN */}
             <div className="flex flex-col gap-[8px]" style={{ transformStyle: 'preserve-3d' }}>
                  {SECTION_MAIN.map((row, i) => (
                     <div key={i} className="flex gap-[6px]" style={{ transformStyle: 'preserve-3d' }}>
                         {row.map(code => (
-                            <Key3D key={code} code={code} label={LABELS[code]} 
-                                   active={activeKeys.includes(code)} 
-                                   tested={history.has(code)} 
-                                   className={code === 'Escape' ? 'mr-10' : ''} />
+                            <Key3D key={code} code={code} label={LABELS[code]} active={activeKeys.includes(code)} tested={history.has(code)} className={code === 'Escape' ? 'mr-10' : ''} />
                         ))}
                     </div>
                  ))}
             </div>
-            {/* NAV */}
             <div className="flex flex-col justify-between" style={{ transformStyle: 'preserve-3d' }}>
                 <div className="flex flex-col gap-[8px]">
                      {SECTION_NAV.map((row, i) => (
@@ -198,7 +205,6 @@ const TesterMode = () => {
                     </div>
                 </div>
             </div>
-            {/* NUMPAD */}
             <div className="grid grid-cols-4 gap-[6px] w-[225px]" style={{ transformStyle: 'preserve-3d', alignContent: 'start' }}>
                  <Key3D code="NumLock" label="Num" active={activeKeys.includes("NumLock")} tested={history.has("NumLock")} className="w-full" />
                  <Key3D code="NumpadDivide" label="/" active={activeKeys.includes("NumpadDivide")} tested={history.has("NumpadDivide")} className="w-full" />
@@ -221,7 +227,6 @@ const TesterMode = () => {
         </div>
       </Keyboard3DWrapper>
 
-      {/* STATS */}
       <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="mt-12 glass-panel px-10 py-5 rounded-full flex gap-10 items-center border border-white/10 z-20">
         <div className="text-center group">
             <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1 group-hover:text-indigo-400 transition-colors">Pressed</div>
@@ -238,7 +243,7 @@ const TesterMode = () => {
                             initial={{ opacity: 0, scale: 0.5, y: 10, filter: "blur(5px)" }}
                             animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
                             exit={{ opacity: 0, scale: 0.9, y: -10 }}
-                            transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 25 }}
                             className="block whitespace-nowrap drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]"
                         >
                             {LABELS[lastKey] || lastKey.replace('Key', '')}
@@ -254,7 +259,6 @@ const TesterMode = () => {
   );
 };
 
-// ... ТУТ ДАЛЕЕ TYPING MODE БЕЗ ИЗМЕНЕНИЙ, ОСТАВЛЯЙ СТАРЫЙ КОД НИЖЕ ...
 const TypingMode = () => {
   const [text, setText] = useState("");
   const [input, setInput] = useState("");
